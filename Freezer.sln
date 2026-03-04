@@ -1,0 +1,10 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version
+VisualStudioVersion = 17.3.32915.558
+MinimumVisualStudioVersion = 10.0.40219.1
+VisualStudioVersion = 17.3.32915.558
+VisualStudioVersion = 17.0.27424.1039
+VisualStudioVersion = 16.0.30921.01
+Project("{E2AE103D-44E6-4F7F-BDAE-BEFA41736D8A}") = "Freezer.App", "src\Freezer.App\Freezer.App.csproj", "{C1C8EFA9-CA05-49C7-9A70-8B54D804BF88}"
+EndProject
+EndSolution

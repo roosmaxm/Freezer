@@ -17,6 +17,9 @@ public class FreezeDetector
     private const double InterruptHighThreshold = 20.0;
     private const double DiskHighLatencyThreshold = 50.0;
 
+    // Time window (seconds) used when scanning event log for events correlated with a freeze
+    private const int EventWindowSeconds = 15;
+
     private int _consecutiveFreezeCount;
     private DateTime _freezeStartTime;
     private bool _inFreeze;
@@ -110,7 +113,7 @@ public class FreezeDetector
             TopProcessesAtFreezeTime = topProcesses,
             ConnectedUsbDevices = new List<string>(usbDevices),
             TdrDetected = tdrDetected,
-            SystemEventLogEntries = EventLogMonitor.GetRecentEvents(15)
+            SystemEventLogEntries = EventLogMonitor.GetRecentEvents(EventWindowSeconds)
         };
     }
 
@@ -163,7 +166,20 @@ public class FreezeDetector
                     "A GPU TDR event (EventID 4101 or nvlddmkm Event 13) was detected in the System event log within 10 seconds " +
                     "of this freeze. Update your NVIDIA RTX 3070 drivers. If issue persists, check GPU stability with FurMark.");
 
-        // 5. Background process burst
+        // 5. DCOM timeout or COM permission error
+        var recentEvents = EventLogMonitor.GetRecentEvents(EventWindowSeconds);
+        if (HasDcomEvent(recentEvents, 10010))
+            return ("DCOM server registration timeout",
+                    "A DistributedCOM EventID 10010 was logged near the freeze: a COM server did not register within the " +
+                    "required timeout. This can stall threads waiting for a COM call to complete. Check Component Services " +
+                    "and consider re-registering the offending server (see CLSID in the event message).");
+        if (HasDcomEvent(recentEvents, 10016))
+            return ("COM activation permission denied",
+                    "A DistributedCOM EventID 10016 was logged near the freeze: an application was denied Local Activation " +
+                    "permission for a COM server. This can cause a brief hang in any process that depends on that COM object. " +
+                    "Grant activation permissions via Component Services (dcomcnfg.exe) for the CLSID listed in the event.");
+
+        // 6. Background process burst
         var suspectProcesses = new[] { "MsMpEng", "SearchIndexer", "WmiPrvSE", "TiWorker", "NvContainerLocalSystem" };
         var topProcs = GetTopProcesses();
         foreach (var proc in topProcs)
@@ -177,11 +193,20 @@ public class FreezeDetector
             }
         }
 
-        // 6. Unknown
+        // 7. Unknown
         return ("Unknown — no clear spike detected before freeze",
                 "No significant DPC, interrupt, disk, or GPU anomaly was detected before this freeze. " +
                 "Consider enabling Windows Performance Recorder (WPR) during next occurrence for ETW-level analysis.");
     }
+
+    /// <summary>
+    /// Returns true if any formatted event entry in <paramref name="events"/> matches the
+    /// DistributedCOM source with the specified <paramref name="eventId"/>.
+    /// </summary>
+    private static bool HasDcomEvent(List<string> events, int eventId) =>
+        events.Any(e =>
+            e.Contains("DistributedCOM", StringComparison.OrdinalIgnoreCase) &&
+            e.Contains($"EventID={eventId}", StringComparison.OrdinalIgnoreCase));
 
     private static List<string> GetTopProcesses()
     {

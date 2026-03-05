@@ -91,7 +91,8 @@ public static class EventLogMonitor
 
     /// <summary>
     /// Returns true for System log events associated with interrupts, hardware errors,
-    /// kernel power issues, driver failures, disk problems, or BSODs.
+    /// kernel power issues, driver failures, disk problems, BSODs, DCOM timeouts,
+    /// COM permission failures, and ETL/performance logging failures.
     /// </summary>
     private static bool IsRelevantSystemEvent(EventLogEntry entry)
     {
@@ -135,6 +136,18 @@ public static class EventLogMonitor
             // Service Control Manager: unexpected service termination
             "Service Control Manager" =>
                 id == 7034 || id == 7031 || id == 7043,
+
+            // DCOM: EventID 10010 = server did not register within timeout;
+            //        EventID 10016 = COM permission denied (local/remote activation)
+            "DistributedCOM" or "DCOM" =>
+                id == 10010 || id == 10016,
+
+            // ETL/Performance tracing session failures:
+            //   EventID 2003 = session max file size reached (data loss possible)
+            //   EventID 2004 = session stopped due to error (e.g. STATUS_LOG_FILE_FULL)
+            //   EventID 2 = session failed to start (e.g. STATUS_OBJECT_NAME_COLLISION)
+            "Microsoft-Windows-Kernel-EventTracing" =>
+                id == 2 || id == 2003 || id == 2004,
 
             _ => false
         };

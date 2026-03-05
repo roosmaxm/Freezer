@@ -130,6 +130,8 @@ for entries written within the preceding 15 seconds. Relevant events captured in
 | WHEA-Logger | 17–20, 47 | Hardware errors (CPU, memory, PCIe) |
 | nvlddmkm | 13, 14 | NVIDIA driver TDR / GPU reset |
 | usbhub / usbport | 25, 26, 43–45 | USB device errors / resets |
+| DistributedCOM | 10010, 10016 | DCOM server timeout / COM permission denied |
+| Microsoft-Windows-Kernel-EventTracing | 2, 2003, 2004 | ETL trace session start failure / log full / stopped |
 | Application Error | 1000 | Application crash |
 | Application Hang | 1002 | Application hang |
 
@@ -141,8 +143,10 @@ These entries appear in the **Freeze Detail** popup and the exported report.
 2. **Interrupt storm** — Interrupt % > 20% → check USB devices (Xbox controller, wireless peripherals)
 3. **NVMe disk stall** — Disk latency > 50ms before freeze → storage driver or thermal issue
 4. **GPU TDR event** — EventID 4101 or nvlddmkm Event 13 in System event log → update GPU drivers
-5. **Background process burst** — MsMpEng, SearchIndexer, WmiPrvSE, TiWorker, NvContainerLocalSystem spiking
-6. **Unknown** — No clear pattern found; use Windows Performance Recorder for deeper analysis
+5. **DCOM server timeout** — DistributedCOM EventID 10010 near freeze → COM server stalling a thread
+6. **COM permission denied** — DistributedCOM EventID 10016 near freeze → grant activation permissions
+7. **Background process burst** — MsMpEng, SearchIndexer, WmiPrvSE, TiWorker, NvContainerLocalSystem spiking
+8. **Unknown** — No clear pattern found; use Windows Performance Recorder for deeper analysis
 
 ### APIs & Data Sources Used
 

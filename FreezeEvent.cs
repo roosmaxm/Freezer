@@ -1,0 +1,33 @@
+namespace Freezer;
+
+/// <summary>
+/// Represents a single detected freeze event with all captured metrics.
+/// </summary>
+public class FreezeEvent
+{
+    public int Index { get; set; }
+    public DateTime Timestamp { get; set; }
+    public double DurationSeconds { get; set; }
+    public string MostLikelyCause { get; set; } = "Unknown";
+    public string Details { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Metric name → array of last ~15 samples captured before the freeze.
+    /// </summary>
+    public Dictionary<string, double[]> PreFreezeMetrics { get; set; } = new();
+
+    /// <summary>
+    /// Top processes by CPU/memory at the time of the freeze.
+    /// </summary>
+    public List<string> TopProcessesAtFreezeTime { get; set; } = new();
+
+    /// <summary>
+    /// USB devices connected at the time of the freeze.
+    /// </summary>
+    public List<string> ConnectedUsbDevices { get; set; } = new();
+
+    /// <summary>
+    /// Whether a GPU TDR event was detected around the freeze time.
+    /// </summary>
+    public bool TdrDetected { get; set; }
+}

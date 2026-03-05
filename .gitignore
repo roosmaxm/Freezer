@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+
+# NuGet
+*.user
+*.suo
+.vs/
+
+# User-specific files
+*.userprefs
+
+# Publish output
+publish/

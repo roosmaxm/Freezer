@@ -47,7 +47,7 @@ public partial class MainForm : Form
         };
 
         ApplyDarkTheme();
-        UpdateStatusBar("Ready. Click ▶ Start Monitoring to begin.");
+        UpdateStatusBar($"Ready. Click ▶ Start Monitoring to begin. Auto-log: {FreezeLogger.LogFilePath}");
     }
 
     // ── Monitoring lifecycle ───────────────────────────────────────────────
@@ -71,7 +71,13 @@ public partial class MainForm : Form
         _uiRefreshTimer.Start();
 
         btnStartStop.Text = "⏹ Stop Monitoring";
-        UpdateStatusBar($"Monitoring started. USB devices found: {_usbDevices.Count}");
+
+        // Check for recent system events (last 24 hours) to warn the user
+        var recentEvents = EventLogMonitor.GetRecentHistoricalEvents(24);
+        if (recentEvents.Count > 0)
+            UpdateStatusBar($"Monitoring started. {_usbDevices.Count} USB device(s) found. ⚠ {recentEvents.Count} relevant system event(s) in the last 24h — check Event Viewer.");
+        else
+            UpdateStatusBar($"Monitoring started. USB devices found: {_usbDevices.Count}");
     }
 
     private void StopMonitoring()
@@ -111,6 +117,9 @@ public partial class MainForm : Form
 
         _freezeEvents.Add(freezeEvent);
         AddFreezeEventToList(freezeEvent);
+
+        // Auto-persist to log file
+        FreezeLogger.Append(freezeEvent);
 
         // Flash title
         Text = "🧊 FREEZE DETECTED — Freezer";

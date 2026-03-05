@@ -125,6 +125,21 @@ public class FreezeDetailForm : Form
             Sep();
         }
 
+        if (ev.SystemEventLogEntries.Count > 0)
+        {
+            Header("─── Windows Event Log (System + Application) ───────────────");
+            foreach (var entry in ev.SystemEventLogEntries)
+            {
+                tb.SelectionFont = new Font("Consolas", 8.5f);
+                bool isError = entry.Contains("[System/ERR]") || entry.Contains("[Application/ERR]");
+                tb.SelectionColor = isError
+                    ? Color.FromArgb(255, 130, 130)
+                    : Color.FromArgb(200, 210, 200);
+                tb.AppendText($"  {entry}\n");
+            }
+            Sep();
+        }
+
         if (ev.PreFreezeMetrics.Count > 0)
         {
             Header("─── Pre-Freeze Metric Snapshot (last 3s @ 200ms intervals) ─");

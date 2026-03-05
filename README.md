@@ -97,12 +97,43 @@ Time spent servicing hardware interrupts.
 
 ---
 
-## Freeze Detection Logic
+## Freeze Detection & Logging
+
+### What Gets Detected
 
 A freeze is detected when **all three** conditions are true for **≥ 2 consecutive samples (400ms)**:
 - CPU usage drops below **5%**
 - Disk read+write latency drops below **0.5ms** (near zero activity)
 - GPU usage drops below **5%** (or GPU data is unavailable)
+
+### Automatic Persistent Log
+
+Every detected freeze is **automatically appended** to a persistent log file at:
+
+```
+%APPDATA%\Freezer\FreezeLog.txt
+```
+
+This file is created on first detection and survives application restarts. The full log path
+is displayed in the status bar when the application starts.
+
+### Windows Event Log Monitoring
+
+At each freeze, the application scans the Windows **System** and **Application** event logs
+for entries written within the preceding 15 seconds. Relevant events captured include:
+
+| Source | Event IDs | Meaning |
+|--------|-----------|---------|
+| Kernel-Power | 41, 6008 | Unexpected shutdown / dirty reboot |
+| BugCheck | 1001 | Blue-screen (BSOD) recorded after reboot |
+| disk / storahci / stornvme | 7, 11, 51, 129 | Disk I/O errors, timeouts, resets |
+| WHEA-Logger | 17–20, 47 | Hardware errors (CPU, memory, PCIe) |
+| nvlddmkm | 13, 14 | NVIDIA driver TDR / GPU reset |
+| usbhub / usbport | 25, 26, 43–45 | USB device errors / resets |
+| Application Error | 1000 | Application crash |
+| Application Hang | 1002 | Application hang |
+
+These entries appear in the **Freeze Detail** popup and the exported report.
 
 ### Cause Analysis Priority
 
@@ -113,7 +144,17 @@ A freeze is detected when **all three** conditions are true for **≥ 2 consecut
 5. **Background process burst** — MsMpEng, SearchIndexer, WmiPrvSE, TiWorker, NvContainerLocalSystem spiking
 6. **Unknown** — No clear pattern found; use Windows Performance Recorder for deeper analysis
 
----
+### APIs & Data Sources Used
+
+The application uses the following Windows system APIs — no internet connection is required:
+
+| API | Used For |
+|-----|---------|
+| **Windows Performance Counters** (`System.Diagnostics.PerformanceCounter`) | CPU %, RAM %, Disk latency, DPC %, Interrupt %, GPU % |
+| **WMI** (`System.Management`) | GPU utilization via `Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine`, USB device enumeration via `Win32_PnPEntity` |
+| **Windows Event Log** (`System.Diagnostics.EventLog`) | GPU TDR detection, interrupt/crash/hardware-error event capture at freeze time |
+| **Process API** (`System.Diagnostics.Process`) | Top CPU/memory consumers at freeze time |
+
 
 ## Common Causes for Your Symptoms
 
@@ -166,6 +207,8 @@ Freezer/
 ├── MainForm.Designer.cs    — WinForms layout
 ├── FreezeDetailForm.cs     — Freeze event detail popup
 ├── FreezeDetector.cs       — Freeze detection and cause analysis
+├── EventLogMonitor.cs      — Windows Event Log scanning (interrupts, crashes, hardware errors)
+├── FreezeLogger.cs         — Auto-persistent log file (%APPDATA%\Freezer\FreezeLog.txt)
 ├── SystemMonitor.cs        — Performance counter polling + rolling buffers
 ├── GpuMonitor.cs           — GPU usage via WMI performance counters
 ├── UsbMonitor.cs           — USB device enumeration via WMI

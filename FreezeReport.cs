@@ -38,6 +38,14 @@ public static class FreezeReport
             writer.WriteLine($"  TDR Detected: {(e.TdrDetected ? "YES" : "No")}");
             writer.WriteLine();
 
+            if (e.SystemEventLogEntries.Count > 0)
+            {
+                writer.WriteLine($"  Windows Event Log Entries ({e.SystemEventLogEntries.Count}):");
+                foreach (var entry in e.SystemEventLogEntries)
+                    writer.WriteLine($"    {entry}");
+                writer.WriteLine();
+            }
+
             if (e.ConnectedUsbDevices.Count > 0)
             {
                 writer.WriteLine("  Connected USB Devices:");

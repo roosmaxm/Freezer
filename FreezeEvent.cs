@@ -30,4 +30,10 @@ public class FreezeEvent
     /// Whether a GPU TDR event was detected around the freeze time.
     /// </summary>
     public bool TdrDetected { get; set; }
+
+    /// <summary>
+    /// Relevant Windows Event Log entries (System + Application) captured within
+    /// 15 seconds of the freeze. Each entry is a human-readable formatted string.
+    /// </summary>
+    public List<string> SystemEventLogEntries { get; set; } = new();
 }

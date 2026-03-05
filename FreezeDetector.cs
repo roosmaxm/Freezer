@@ -109,7 +109,8 @@ public class FreezeDetector
             PreFreezeMetrics = preFreeze,
             TopProcessesAtFreezeTime = topProcesses,
             ConnectedUsbDevices = new List<string>(usbDevices),
-            TdrDetected = tdrDetected
+            TdrDetected = tdrDetected,
+            SystemEventLogEntries = EventLogMonitor.GetRecentEvents(15)
         };
     }
 

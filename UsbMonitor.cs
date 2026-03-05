@@ -21,8 +21,10 @@ public static class UsbMonitor
 
             foreach (ManagementObject obj in searcher.Get())
             {
-                string name = obj["Name"]?.ToString() ?? "Unknown Device";
-                string deviceId = obj["DeviceID"]?.ToString() ?? string.Empty;
+                string? rawName = obj["Name"]?.ToString();
+                string? rawDeviceId = obj["DeviceID"]?.ToString();
+                string name = rawName != null ? System.Net.WebUtility.HtmlDecode(rawName) : "Unknown Device";
+                string deviceId = rawDeviceId != null ? System.Net.WebUtility.HtmlDecode(rawDeviceId) : string.Empty;
                 if (!string.IsNullOrWhiteSpace(name))
                     devices.Add($"{name} [{deviceId}]");
             }

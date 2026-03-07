@@ -16,6 +16,9 @@ public partial class MainForm : Form
     // Tracks the last time we polled the Application log for crash events
     private DateTime _lastCrashEventCheck;
     private static readonly TimeSpan CrashEventPollInterval = TimeSpan.FromSeconds(10);
+
+    // Tag value set on the placeholder list-view item shown before any events arrive
+    private const string PlaceholderTag = "placeholder";
     // ── UI timers ──────────────────────────────────────────────────────────
     private readonly System.Windows.Forms.Timer _uiRefreshTimer;
     private readonly System.Windows.Forms.Timer _titleRestoreTimer;
@@ -66,7 +69,8 @@ public partial class MainForm : Form
         _detector.FreezeDetected += OnFreezeDetected;
         _monitor.SampleTaken += OnSampleTaken;
 
-        _lastCrashEventCheck = DateTime.Now;
+        // Subtract the poll interval so the first UI refresh triggers an immediate poll
+        _lastCrashEventCheck = DateTime.Now.Subtract(CrashEventPollInterval);
 
         // Report any initialization warnings
         if (_monitor.InitWarnings.Count > 0)
@@ -182,8 +186,18 @@ public partial class MainForm : Form
     private void FreezeListView_DoubleClick(object? sender, EventArgs e)
     {
         if (listViewFreezes.SelectedItems.Count == 0) return;
-        if (listViewFreezes.SelectedItems[0].Tag is FreezeEvent freezeEvent)
+
+        var tag = listViewFreezes.SelectedItems[0].Tag;
+
+        if (tag is FreezeEvent freezeEvent)
+        {
             ShowFreezeDetail(freezeEvent);
+        }
+        else if (tag is EventLogNotification notification)
+        {
+            MessageBox.Show(notification.Message, $"{notification.Category} — {notification.Time:yyyy-MM-dd HH:mm:ss}",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
     }
 
     // ── UI Helpers ─────────────────────────────────────────────────────────
@@ -192,7 +206,7 @@ public partial class MainForm : Form
     {
         // Remove "No freezes detected yet" placeholder
         if (listViewFreezes.Items.Count == 1 &&
-            listViewFreezes.Items[0].Tag is string tag && tag == "placeholder")
+            listViewFreezes.Items[0].Tag is string tag && tag == PlaceholderTag)
             listViewFreezes.Items.Clear();
 
         var item = new ListViewItem((_freezeEvents.Count).ToString());
@@ -209,21 +223,34 @@ public partial class MainForm : Form
         item.EnsureVisible();
     }
 
-    private void AddCrashEventToList(DateTime time, string message)
+    private void AddEventLogNotificationToList(EventLogNotification notification)
     {
         // Remove placeholder if still present
         if (listViewFreezes.Items.Count == 1 &&
-            listViewFreezes.Items[0].Tag is string t && t == "placeholder")
+            listViewFreezes.Items[0].Tag is string t && t == PlaceholderTag)
             listViewFreezes.Items.Clear();
 
+        bool isSystemWarning = notification.Category == "System Warning";
+
         var item = new ListViewItem("—");
-        item.SubItems.Add(time.ToString("yyyy-MM-dd HH:mm:ss"));
+        item.SubItems.Add(notification.Time.ToString("yyyy-MM-dd HH:mm:ss"));
         item.SubItems.Add("—");
-        item.SubItems.Add("Application Crash");
-        item.SubItems.Add(message.Length > 80 ? message[..77] + "..." : message);
-        item.ForeColor = Color.FromArgb(255, 200, 80);
-        item.BackColor = Color.FromArgb(35, 28, 10);
-        item.Tag = "crash";
+        item.SubItems.Add(notification.Category);
+        string msg = notification.Message;
+        item.SubItems.Add(msg.Length > 80 ? msg[..77] + "..." : msg);
+
+        if (isSystemWarning)
+        {
+            item.ForeColor = Color.FromArgb(100, 200, 255);  // cyan for system/driver warnings
+            item.BackColor = Color.FromArgb(10, 25, 40);
+        }
+        else
+        {
+            item.ForeColor = Color.FromArgb(255, 200, 80);   // amber for application crashes
+            item.BackColor = Color.FromArgb(35, 28, 10);
+        }
+
+        item.Tag = notification;
         listViewFreezes.Items.Add(item);
         item.EnsureVisible();
     }
@@ -236,9 +263,8 @@ public partial class MainForm : Form
         var since = _lastCrashEventCheck;
         _lastCrashEventCheck = DateTime.Now;
 
-        var crashes = EventLogMonitor.GetApplicationCrashEvents(since);
-        foreach (var (time, message) in crashes)
-            AddCrashEventToList(time, message);
+        foreach (var notification in EventLogMonitor.GetPolledEvents(since))
+            AddEventLogNotificationToList(notification);
     }
 
     private void ShowFreezeDetail(FreezeEvent ev)

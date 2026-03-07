@@ -39,8 +39,10 @@ public class FreezeEvent
 }
 
 /// <summary>
-/// Represents an application crash or hang event sourced from the Windows Application
-/// Event Log (e.g. Application Error EventID 1000 or Application Hang EventID 1002).
-/// Displayed in the event list independently of freeze detection.
+/// A notable Windows Event Log entry surfaced in the main event list independently
+/// of freeze detection (e.g. application crashes, kernel filter-driver warnings).
 /// </summary>
-public record AppCrashEvent(DateTime Time, string Message);
+/// <param name="Time">When the event was generated.</param>
+/// <param name="Category">Human-readable category, e.g. "Application Crash" or "System Warning".</param>
+/// <param name="Message">Full formatted event message.</param>
+public record EventLogNotification(DateTime Time, string Category, string Message);

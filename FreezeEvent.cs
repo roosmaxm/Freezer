@@ -37,3 +37,12 @@ public class FreezeEvent
     /// </summary>
     public List<string> SystemEventLogEntries { get; set; } = new();
 }
+
+/// <summary>
+/// A notable Windows Event Log entry surfaced in the main event list independently
+/// of freeze detection (e.g. application crashes, kernel filter-driver warnings).
+/// </summary>
+/// <param name="Time">When the event was generated.</param>
+/// <param name="Category">Human-readable category, e.g. "Application Crash" or "System Warning".</param>
+/// <param name="Message">Full formatted event message.</param>
+public record EventLogNotification(DateTime Time, string Category, string Message);

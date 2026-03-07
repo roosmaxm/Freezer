@@ -25,6 +25,66 @@ public static class EventLogMonitor
     }
 
     /// <summary>
+    /// Returns notable event log entries that occurred strictly after
+    /// <paramref name="since"/> and should be surfaced in the UI regardless of
+    /// whether a freeze was detected. Covers:
+    /// <list type="bullet">
+    ///   <item>Application crashes and hangs (Application log)</item>
+    ///   <item>Kernel file-system filter-driver warnings (System log, FilterManager)</item>
+    /// </list>
+    /// Suitable for periodic polling on a UI timer.
+    /// </summary>
+    public static List<EventLogNotification> GetPolledEvents(DateTime since)
+    {
+        var results = new List<EventLogNotification>();
+        try
+        {
+            using var appLog = new EventLog("Application");
+            int count = appLog.Entries.Count;
+            for (int i = count - 1; i >= 0; i--)
+            {
+                EventLogEntry entry;
+                try { entry = appLog.Entries[i]; }
+                catch { continue; }
+
+                if (entry.TimeGenerated <= since)
+                    break;
+
+                if (IsRelevantApplicationEvent(entry))
+                    results.Add(new EventLogNotification(
+                        entry.TimeGenerated,
+                        "Application Crash",
+                        FormatEntry("Application", entry)));
+            }
+        }
+        catch { /* Event log access may be restricted */ }
+
+        try
+        {
+            using var sysLog = new EventLog("System");
+            int count = sysLog.Entries.Count;
+            for (int i = count - 1; i >= 0; i--)
+            {
+                EventLogEntry entry;
+                try { entry = sysLog.Entries[i]; }
+                catch { continue; }
+
+                if (entry.TimeGenerated <= since)
+                    break;
+
+                if (IsPolledSystemEvent(entry))
+                    results.Add(new EventLogNotification(
+                        entry.TimeGenerated,
+                        "System Warning",
+                        FormatEntry("System", entry)));
+            }
+        }
+        catch { /* Event log access may be restricted */ }
+
+        return results;
+    }
+
+    /// <summary>
     /// Returns a list of historically recent relevant events (last 24 hours)
     /// from the Windows event logs. Used to populate context at startup.
     /// </summary>
@@ -135,6 +195,25 @@ public static class EventLogMonitor
             // Service Control Manager: unexpected service termination
             "Service Control Manager" =>
                 id == 7034 || id == 7031 || id == 7043,
+
+            _ => IsPolledSystemEvent(entry)   // also include proactively-polled events as freeze context
+        };
+    }
+
+    /// <summary>
+    /// Returns true for System log events that should be surfaced proactively in
+    /// the main event list, independently of freeze detection.
+    /// </summary>
+    private static bool IsPolledSystemEvent(EventLogEntry entry)
+    {
+        long id = entry.InstanceId & 0xFFFF;
+
+        return entry.Source switch
+        {
+            // FilterManager: EventID 11 = filter driver does not support bypass IO.
+            // Kernel file-system filter drivers (e.g. EasyAntiCheat, security software)
+            // that lack bypass IO support can introduce latency spikes in I/O paths.
+            "Microsoft-Windows-FilterManager" => id == 11,
 
             _ => false
         };

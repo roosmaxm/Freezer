@@ -145,7 +145,7 @@ partial class MainForm
     {
         lblFreezeLogTitle = new Label
         {
-            Text = "❄  Freeze Event Log — double-click a row for full details",
+            Text = "❄  Freeze, Crash & System Warning Log — double-click any row for full details",
             Dock = DockStyle.Top,
             Height = 22,
             ForeColor = Color.FromArgb(180, 220, 255),
@@ -179,7 +179,7 @@ partial class MainForm
         placeholder.SubItems.Add("No freezes detected yet");
         placeholder.SubItems.Add("Start monitoring and wait for a freeze event.");
         placeholder.ForeColor = Color.FromArgb(100, 100, 120);
-        placeholder.Tag = "placeholder";
+        placeholder.Tag = PlaceholderTag;
         listViewFreezes.Items.Add(placeholder);
 
         freezeLogPanel.Controls.Add(listViewFreezes);

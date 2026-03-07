@@ -37,3 +37,10 @@ public class FreezeEvent
     /// </summary>
     public List<string> SystemEventLogEntries { get; set; } = new();
 }
+
+/// <summary>
+/// Represents an application crash or hang event sourced from the Windows Application
+/// Event Log (e.g. Application Error EventID 1000 or Application Hang EventID 1002).
+/// Displayed in the event list independently of freeze detection.
+/// </summary>
+public record AppCrashEvent(DateTime Time, string Message);

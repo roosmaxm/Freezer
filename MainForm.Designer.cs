@@ -145,7 +145,7 @@ partial class MainForm
     {
         lblFreezeLogTitle = new Label
         {
-            Text = "❄  Freeze Event Log — double-click a row for full details",
+            Text = "❄  Freeze & Crash Event Log — double-click a freeze row for full details",
             Dock = DockStyle.Top,
             Height = 22,
             ForeColor = Color.FromArgb(180, 220, 255),

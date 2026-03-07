@@ -13,6 +13,9 @@ public partial class MainForm : Form
     private readonly List<FreezeEvent> _freezeEvents = new();
     private List<string> _usbDevices = new();
 
+    // Tracks the last time we polled the Application log for crash events
+    private DateTime _lastCrashEventCheck;
+    private static readonly TimeSpan CrashEventPollInterval = TimeSpan.FromSeconds(10);
     // ── UI timers ──────────────────────────────────────────────────────────
     private readonly System.Windows.Forms.Timer _uiRefreshTimer;
     private readonly System.Windows.Forms.Timer _titleRestoreTimer;
@@ -62,6 +65,8 @@ public partial class MainForm : Form
         _detector = new FreezeDetector(_monitor);
         _detector.FreezeDetected += OnFreezeDetected;
         _monitor.SampleTaken += OnSampleTaken;
+
+        _lastCrashEventCheck = DateTime.Now;
 
         // Report any initialization warnings
         if (_monitor.InitWarnings.Count > 0)
@@ -136,6 +141,7 @@ public partial class MainForm : Form
     {
         RefreshGraphs();
         RefreshCurrentValues();
+        PollApplicationCrashEvents();
     }
 
     private void BtnStartStop_Click(object? sender, EventArgs e)
@@ -176,9 +182,8 @@ public partial class MainForm : Form
     private void FreezeListView_DoubleClick(object? sender, EventArgs e)
     {
         if (listViewFreezes.SelectedItems.Count == 0) return;
-        int index = listViewFreezes.SelectedItems[0].Index;
-        if (index >= 0 && index < _freezeEvents.Count)
-            ShowFreezeDetail(_freezeEvents[index]);
+        if (listViewFreezes.SelectedItems[0].Tag is FreezeEvent freezeEvent)
+            ShowFreezeDetail(freezeEvent);
     }
 
     // ── UI Helpers ─────────────────────────────────────────────────────────
@@ -197,10 +202,43 @@ public partial class MainForm : Form
         item.SubItems.Add(ev.Details.Length > 80 ? ev.Details[..77] + "..." : ev.Details);
         item.ForeColor = Color.FromArgb(255, 120, 120);
         item.BackColor = Color.FromArgb(40, 20, 20);
+        item.Tag = ev;
         listViewFreezes.Items.Add(item);
 
         // Auto-scroll to the latest
         item.EnsureVisible();
+    }
+
+    private void AddCrashEventToList(DateTime time, string message)
+    {
+        // Remove placeholder if still present
+        if (listViewFreezes.Items.Count == 1 &&
+            listViewFreezes.Items[0].Tag is string t && t == "placeholder")
+            listViewFreezes.Items.Clear();
+
+        var item = new ListViewItem("—");
+        item.SubItems.Add(time.ToString("yyyy-MM-dd HH:mm:ss"));
+        item.SubItems.Add("—");
+        item.SubItems.Add("Application Crash");
+        item.SubItems.Add(message.Length > 80 ? message[..77] + "..." : message);
+        item.ForeColor = Color.FromArgb(255, 200, 80);
+        item.BackColor = Color.FromArgb(35, 28, 10);
+        item.Tag = "crash";
+        listViewFreezes.Items.Add(item);
+        item.EnsureVisible();
+    }
+
+    private void PollApplicationCrashEvents()
+    {
+        if (_monitor == null) return;
+        if (DateTime.Now - _lastCrashEventCheck < CrashEventPollInterval) return;
+
+        var since = _lastCrashEventCheck;
+        _lastCrashEventCheck = DateTime.Now;
+
+        var crashes = EventLogMonitor.GetApplicationCrashEvents(since);
+        foreach (var (time, message) in crashes)
+            AddCrashEventToList(time, message);
     }
 
     private void ShowFreezeDetail(FreezeEvent ev)

@@ -25,6 +25,37 @@ public static class EventLogMonitor
     }
 
     /// <summary>
+    /// Returns application crash and hang events (EventID 1000 from Application Error,
+    /// EventID 1002 from Application Hang) that occurred strictly after
+    /// <paramref name="since"/>. Suitable for periodic polling to surface application
+    /// crashes in the UI independently of freeze detection.
+    /// </summary>
+    public static List<(DateTime Time, string Message)> GetApplicationCrashEvents(DateTime since)
+    {
+        var results = new List<(DateTime, string)>();
+        try
+        {
+            using var log = new EventLog("Application");
+            int count = log.Entries.Count;
+
+            for (int i = count - 1; i >= 0; i--)
+            {
+                EventLogEntry entry;
+                try { entry = log.Entries[i]; }
+                catch { continue; }
+
+                if (entry.TimeGenerated <= since)
+                    break;
+
+                if (IsRelevantApplicationEvent(entry))
+                    results.Add((entry.TimeGenerated, FormatEntry("Application", entry)));
+            }
+        }
+        catch { /* Event log access may be restricted */ }
+        return results;
+    }
+
+    /// <summary>
     /// Returns a list of historically recent relevant events (last 24 hours)
     /// from the Windows event logs. Used to populate context at startup.
     /// </summary>

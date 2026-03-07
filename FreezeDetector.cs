@@ -69,7 +69,13 @@ public class FreezeDetector
                 var freezeEvent = BuildFreezeEvent(durationSeconds, usbDevices, eventIndex);
                 _inFreeze = false;
                 _consecutiveFreezeCount = 0;
-                FreezeDetected?.Invoke(this, freezeEvent);
+
+                // Background process bursts (e.g. MsMpEng, SearchIndexer) don't represent
+                // true system freezes — they appear in idle gaps and clutter the log.
+                // Skip them silently so only actionable events are surfaced.
+                if (!freezeEvent.MostLikelyCause.StartsWith("Background process burst",
+                        StringComparison.OrdinalIgnoreCase))
+                    FreezeDetected?.Invoke(this, freezeEvent);
             }
             else
             {

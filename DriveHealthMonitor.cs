@@ -60,7 +60,7 @@ public class DriveHealthMonitor : IDisposable
 
     private DriveHealthSummary ReadHealth()
     {
-        var drives = new List<DriveInfo2>();
+        var drives = new List<DriveHealthInfo>();
 
         // Base list from Win32_DiskDrive (model names + WMI status)
         if (_driveSearcher != null)
@@ -73,7 +73,7 @@ public class DriveHealthMonitor : IDisposable
                                  ?? obj["Caption"]?.ToString()
                                  ?? "Unknown Drive";
                     string status = obj["Status"]?.ToString() ?? "Unknown";
-                    drives.Add(new DriveInfo2 { Model = model, WmiStatus = status });
+                    drives.Add(new DriveHealthInfo { Model = model, WmiStatus = status });
                 }
             }
             catch { }
@@ -94,7 +94,7 @@ public class DriveHealthMonitor : IDisposable
 
                     var info = idx < drives.Count
                         ? drives[idx]
-                        : new DriveInfo2 { Model = $"Drive {idx}" };
+                        : new DriveHealthInfo { Model = $"Drive {idx}" };
 
                     if (attrs.TryGetValue(5,   out long realloc)) info.ReallocatedSectors      = realloc;
                     if (attrs.TryGetValue(187, out long uncorr))  info.ReportedUncorrectable   = uncorr;
@@ -151,7 +151,7 @@ public class DriveHealthMonitor : IDisposable
 // ── Data models ───────────────────────────────────────────────────────────────
 
 /// <summary>SMART / WMI health data for a single physical drive.</summary>
-public class DriveInfo2
+public class DriveHealthInfo
 {
     public string Model       { get; set; } = "Unknown";
     public string WmiStatus   { get; set; } = "Unknown";
@@ -202,12 +202,12 @@ public class DriveInfo2
 /// <summary>Aggregated health summary for all physical drives in the system.</summary>
 public class DriveHealthSummary
 {
-    public static readonly DriveHealthSummary Unknown = new(new List<DriveInfo2>());
+    public static readonly DriveHealthSummary Unknown = new(new List<DriveHealthInfo>());
 
-    public List<DriveInfo2> Drives    { get; }
+    public List<DriveHealthInfo> Drives    { get; }
     public bool             AnyErrors => Drives.Any(d => d.HasErrors);
 
-    public DriveHealthSummary(List<DriveInfo2> drives) => Drives = drives;
+    public DriveHealthSummary(List<DriveHealthInfo> drives) => Drives = drives;
 
     /// <summary>One-line display string for the status bar or current-values label.</summary>
     public string ToDisplayString()

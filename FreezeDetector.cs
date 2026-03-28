@@ -193,7 +193,8 @@ public class FreezeDetector
         {
             if (nvmeTempC >= 65.0)
                 return ("NVMe thermal throttling",
-                        $"Peak disk latency was {maxDisk:F1}ms and NVMe temperature was {nvmeTempC:F0}°C (throttle threshold ~70°C). " +
+                        $"Peak disk latency was {maxDisk:F1}ms and NVMe temperature was {nvmeTempC:F0}°C " +
+                        "(drives begin throttling in the 65-70°C range). " +
                         "Add an NVMe heatsink, improve case airflow, or move the drive to a cooler M.2 slot. " +
                         "Sustained sequential workloads (large file transfers, game installs) commonly trigger this.");
 

@@ -151,14 +151,12 @@ public class ThermalMonitor : IDisposable
 
     private static bool IsGpuZone(string lower) =>
         lower.Contains("gpu") || lower.Contains("vga") || lower.Contains("gput") ||
-        lower.Contains("disp") || lower.Contains("dGPU", StringComparison.OrdinalIgnoreCase);
+        lower.Contains("disp") || lower.Contains("dgpu");
 
     private static bool IsDriveZone(string lower) =>
         lower.Contains("nvme") || lower.Contains("ssd") ||
         lower.Contains("m.2") || lower.Contains("strg") ||
         lower.Contains("stor") || lower.Contains("disk");
-
-    // ── SMART temperature ──────────────────────────────────────────────────
 
     /// <summary>
     /// Parses SMART attribute 0xC2 (Temperature_Celsius) or 0xBE (Airflow Temperature)

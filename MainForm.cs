@@ -41,10 +41,16 @@ public partial class MainForm : Form
         (MetricNames.DiskWrite,  Color.FromArgb(255, 160,  40), "ms",   100),
         (MetricNames.NvmeTempC,  Color.FromArgb(255, 200, 100), "°C",   100),
         // Row 3: DPC, interrupt %, page faults, network in
-        (MetricNames.Dpc,        Color.FromArgb(255, 100, 100), "%",    100),
-        (MetricNames.Interrupt,  Color.FromArgb(255, 140,  50), "%",    100),
-        (MetricNames.PageFaults, Color.FromArgb(160, 255, 200), "/s", 10000),
-        (MetricNames.NetIn,      Color.FromArgb(100, 220, 240), "MB/s",  100),
+        (MetricNames.Dpc,            Color.FromArgb(255, 100, 100), "%",    100),
+        (MetricNames.Interrupt,      Color.FromArgb(255, 140,  50), "%",    100),
+        (MetricNames.PageFaults,     Color.FromArgb(160, 255, 200), "/s", 10000),
+        (MetricNames.NetIn,          Color.FromArgb(100, 220, 240), "MB/s",  100),
+        // Row 4: write copies, transition faults, standby cache, network out
+        // (MaxY 500 000 matches the 502 654/s spikes observed in the problem report)
+        (MetricNames.WriteCopies,     Color.FromArgb(255, 160, 220), "/s", 500000),
+        (MetricNames.TransitionFaults,Color.FromArgb(200, 255, 160), "/s", 500000),
+        (MetricNames.CacheBytes,      Color.FromArgb( 80, 200, 255), "MB",  16384),
+        (MetricNames.NetOut,          Color.FromArgb(255, 200, 120), "MB/s",   100),
     };
 
     public MainForm()
@@ -311,7 +317,10 @@ public partial class MainForm : Form
             $"Disk R: {_monitor.LatestDiskReadMs:F1}ms  W: {_monitor.LatestDiskWriteMs:F1}ms  " +
             $"DPC: {_monitor.LatestDpcPercent:F1}%  IRQ: {_monitor.LatestInterruptPercent:F1}%  " +
             $"PF: {_monitor.LatestPageFaultsSec:F0}/s  " +
-            $"Net↓: {_monitor.LatestNetInMbps:F1}MB/s  " +
+            $"WC: {_monitor.LatestWriteCopiesSec:F0}/s  " +
+            $"TF: {_monitor.LatestTransitionFaultsSec:F0}/s  " +
+            $"Cache: {_monitor.LatestCacheMB:F0}MB  " +
+            $"Net↓: {_monitor.LatestNetInMbps:F1}MB/s  ↑: {_monitor.LatestNetOutMbps:F1}MB/s  " +
             $"{driveStatus}";
     }
 

@@ -12,6 +12,9 @@ public class FreezeDetector
     private const double GpuFreezeThreshold = 5.0;
     private const double DiskFreezeThreshold = 0.5; // ms
 
+    // Minimum duration for a hard-freeze event to be reported (filters out false positives)
+    private const double MinFreezeDurationSeconds = 1.0;
+
     // Cause analysis thresholds
     private const double DpcHighThreshold = 15.0;
     private const double InterruptHighThreshold = 20.0;
@@ -49,10 +52,11 @@ public class FreezeDetector
 
         bool cpuFrozen = cpu < CpuFreezeThreshold;
         bool diskFrozen = diskRead < DiskFreezeThreshold && diskWrite < DiskFreezeThreshold;
-        // If GPU data unavailable (−1), only use CPU and disk
-        bool gpuFrozen = gpu < 0 || gpu < GpuFreezeThreshold;
+        // If GPU data is unavailable (−1), exclude GPU from freeze detection
+        bool gpuFrozen = gpu >= 0 && gpu < GpuFreezeThreshold;
+        bool gpuAvailable = gpu >= 0;
 
-        bool allFrozen = cpuFrozen && diskFrozen && gpuFrozen;
+        bool allFrozen = cpuFrozen && diskFrozen && (!gpuAvailable || gpuFrozen);
 
         if (allFrozen)
         {
@@ -70,10 +74,13 @@ public class FreezeDetector
             {
                 // Freeze ended — characterize it
                 double durationSeconds = (DateTime.Now - _freezeStartTime).TotalSeconds;
-                var freezeEvent = BuildFreezeEvent(durationSeconds, usbDevices, eventIndex);
                 _inFreeze = false;
                 _consecutiveFreezeCount = 0;
-                FreezeDetected?.Invoke(this, freezeEvent);
+                if (durationSeconds >= MinFreezeDurationSeconds)
+                {
+                    var freezeEvent = BuildFreezeEvent(durationSeconds, usbDevices, eventIndex);
+                    FreezeDetected?.Invoke(this, freezeEvent);
+                }
             }
             else
             {

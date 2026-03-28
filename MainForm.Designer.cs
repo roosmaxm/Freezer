@@ -32,8 +32,8 @@ partial class MainForm
 
         // ── Form ────────────────────────────────────────────────────────────
         Text = "Freezer — PC Freeze Diagnostic Dashboard";
-        Size = new Size(1280, 800);
-        MinimumSize = new Size(900, 600);
+        Size = new Size(1440, 860);
+        MinimumSize = new Size(1100, 650);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(18, 18, 24);
         ForeColor = Color.FromArgb(220, 220, 230);
@@ -106,22 +106,22 @@ partial class MainForm
         var gridLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 2,
-            ColumnCount = 3,
+            RowCount = 3,
+            ColumnCount = 4,
             BackColor = Color.FromArgb(18, 18, 24),
             CellBorderStyle = TableLayoutPanelCellBorderStyle.Single,
         };
-        for (int c = 0; c < 3; c++)
-            gridLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-        gridLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        gridLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        for (int c = 0; c < 4; c++)
+            gridLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+        for (int r = 0; r < 3; r++)
+            gridLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
 
         for (int i = 0; i < GraphDefinitions.Length; i++)
         {
             var def = GraphDefinitions[i];
             var p = CreateGraphPanel(def.Metric, def.LineColor, def.Unit, def.MaxY);
             _graphPanels.Add(p);
-            gridLayout.Controls.Add(p, i % 3, i / 3);
+            gridLayout.Controls.Add(p, i % 4, i / 4);
         }
 
         graphPanel.Controls.Add(gridLayout);

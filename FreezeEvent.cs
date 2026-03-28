@@ -36,6 +36,20 @@ public class FreezeEvent
     /// 15 seconds of the freeze. Each entry is a human-readable formatted string.
     /// </summary>
     public List<string> SystemEventLogEntries { get; set; } = new();
+
+    // ── Thermal snapshot ──────────────────────────────────────────────────
+
+    /// <summary>CPU temperature in °C at freeze time (-1 = unavailable).</summary>
+    public double CpuTempCAtFreeze  { get; set; } = -1;
+
+    /// <summary>GPU temperature in °C at freeze time (-1 = unavailable).</summary>
+    public double GpuTempCAtFreeze  { get; set; } = -1;
+
+    /// <summary>NVMe/SSD temperature in °C at freeze time (-1 = unavailable).</summary>
+    public double NvmeTempCAtFreeze { get; set; } = -1;
+
+    /// <summary>Drive health summary captured at freeze time.</summary>
+    public string DriveHealthAtFreeze { get; set; } = string.Empty;
 }
 
 /// <summary>

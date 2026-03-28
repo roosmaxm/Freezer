@@ -36,6 +36,13 @@ public static class FreezeReport
             writer.WriteLine($"  Cause       : {e.MostLikelyCause}");
             writer.WriteLine($"  Details     : {e.Details}");
             writer.WriteLine($"  TDR Detected: {(e.TdrDetected ? "YES" : "No")}");
+
+            string CStr(double v) => v < 0 ? "N/A" : $"{v:F0}°C";
+            writer.WriteLine($"  CPU Temp    : {CStr(e.CpuTempCAtFreeze)}");
+            writer.WriteLine($"  GPU Temp    : {CStr(e.GpuTempCAtFreeze)}");
+            writer.WriteLine($"  NVMe Temp   : {CStr(e.NvmeTempCAtFreeze)}");
+            if (!string.IsNullOrEmpty(e.DriveHealthAtFreeze))
+                writer.WriteLine($"  Drive Health: {e.DriveHealthAtFreeze}");
             writer.WriteLine();
 
             if (e.SystemEventLogEntries.Count > 0)

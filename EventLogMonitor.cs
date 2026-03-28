@@ -168,20 +168,30 @@ public static class EventLogMonitor
                 id == 1001 || id == 1002,
 
             // Disk and storage errors
-            "disk" or "Disk" =>
-                id == 7 || id == 11 || id == 15 || id == 51 || id == 52,
+            // 7 = bad block, 9 = timeout, 11 = controller error, 15 = ?, 51 = paging error,
+            // 52 = warning, 153 = StorPort timeout warning
+            "disk" or "Disk" or "Microsoft-Windows-Disk" =>
+                id == 7 || id == 9 || id == 11 || id == 15 ||
+                id == 51 || id == 52 || id == 153,
 
-            // StorPort timeouts and resets
-            "storahci" or "StorPort" or "stornvme" or "nvme" =>
-                id == 129 || id == 130 || id == 133,
+            // StorPort timeouts and resets (129, 130, 133) + controller timeout (9)
+            "storahci" or "StorPort" =>
+                id == 9 || id == 129 || id == 130 || id == 133,
 
-            // WHEA hardware errors (correctable / uncorrectable)
+            // NVMe-specific driver events
+            "stornvme" or "nvme" or "Microsoft-Windows-StorDiag" =>
+                id == 9 || id == 129 || id == 130 || id == 133,
+
+            // WHEA hardware errors (correctable / uncorrectable / PCIe)
+            // 1 = WHEA correctable error, 2 = WHEA uncorrectable error, 17-20 = hardware error,
+            // 47 = PCIe AER uncorrectable error
             "Microsoft-Windows-WHEA-Logger" =>
+                id == 1 || id == 2 ||
                 id == 17 || id == 18 || id == 19 || id == 20 || id == 47,
 
             // NVIDIA GPU TDR and driver events
             "nvlddmkm" =>
-                id == 13 || id == 14,
+                id == 11 || id == 13 || id == 14,
 
             // Generic TDR via display infrastructure
             "Microsoft-Windows-DisplayPort-UcmCx30" or "atikmpag" or

@@ -43,6 +43,14 @@ public static class FreezeLogger
             writer.WriteLine($"  Details     : {ev.Details}");
             writer.WriteLine($"  TDR Detected: {(ev.TdrDetected ? "YES" : "No")}");
 
+            // Thermal snapshot
+            string CStr(double v) => v < 0 ? "N/A" : $"{v:F0}°C";
+            writer.WriteLine($"  CPU Temp    : {CStr(ev.CpuTempCAtFreeze)}");
+            writer.WriteLine($"  GPU Temp    : {CStr(ev.GpuTempCAtFreeze)}");
+            writer.WriteLine($"  NVMe Temp   : {CStr(ev.NvmeTempCAtFreeze)}");
+            if (!string.IsNullOrEmpty(ev.DriveHealthAtFreeze))
+                writer.WriteLine($"  Drive Health: {ev.DriveHealthAtFreeze}");
+
             if (ev.SystemEventLogEntries.Count > 0)
             {
                 writer.WriteLine($"  Event Log Entries ({ev.SystemEventLogEntries.Count}):");

@@ -132,8 +132,11 @@ public class FreezeDetector
             [MetricNames.CpuTempC]   = _monitor.GetLastSamples(MetricNames.CpuTempC,   sampleCount),
             [MetricNames.GpuTempC]   = _monitor.GetLastSamples(MetricNames.GpuTempC,   sampleCount),
             [MetricNames.NvmeTempC]  = _monitor.GetLastSamples(MetricNames.NvmeTempC,  sampleCount),
-            [MetricNames.PageFaults] = _monitor.GetLastSamples(MetricNames.PageFaults, sampleCount),
-            [MetricNames.NetIn]      = _monitor.GetLastSamples(MetricNames.NetIn,      sampleCount),
+            [MetricNames.PageFaults]      = _monitor.GetLastSamples(MetricNames.PageFaults,      sampleCount),
+            [MetricNames.WriteCopies]     = _monitor.GetLastSamples(MetricNames.WriteCopies,     sampleCount),
+            [MetricNames.TransitionFaults] = _monitor.GetLastSamples(MetricNames.TransitionFaults, sampleCount),
+            [MetricNames.CacheBytes]      = _monitor.GetLastSamples(MetricNames.CacheBytes,      sampleCount),
+            [MetricNames.NetIn]           = _monitor.GetLastSamples(MetricNames.NetIn,           sampleCount),
         };
 
         bool tdrDetected = GpuMonitor.CheckForTdrEvent(10);
@@ -230,10 +233,42 @@ public class FreezeDetector
                         "Add an NVMe heatsink, improve case airflow, or move the drive to a cooler M.2 slot. " +
                         "Sustained sequential workloads (large file transfers, game installs) commonly trigger this.");
 
+            // ── 5a. Memory compression stall alongside the disk stall ────────
+            bool highWriteCopies =
+                preFreeze.TryGetValue(MetricNames.WriteCopies, out var wcSamples) &&
+                wcSamples.Length > 0 && wcSamples.Max() > 50_000;
+            bool highTransFaults =
+                preFreeze.TryGetValue(MetricNames.TransitionFaults, out var tfSamples) &&
+                tfSamples.Length > 0 && tfSamples.Max() > 50_000;
+
+            if (highWriteCopies || highTransFaults)
+            {
+                double peakWC = highWriteCopies ? wcSamples!.Max() : 0;
+                double peakTF = highTransFaults ? tfSamples!.Max() : 0;
+                string nvmeTempNote = nvmeTempC < 0
+                    ? " NVMe temperature is currently unavailable (N/A) — enable S.M.A.R.T. polling " +
+                      "in HWiNFO64 to check for thermal throttling (drives stall above ~70°C)."
+                    : string.Empty;
+                return ("Memory compression stall — Windows paging to NVMe",
+                        $"Peak disk latency was {maxDisk:F1}ms alongside " +
+                        (highWriteCopies && highTransFaults
+                            ? $"{peakWC:F0} write copies/sec and {peakTF:F0} transition faults/sec"
+                            : highWriteCopies
+                                ? $"{peakWC:F0} write copies/sec"
+                                : $"{peakTF:F0} transition faults/sec") +
+                        ". Windows ran out of physical RAM and stalled while compressing or swapping memory " +
+                        "to the NVMe drive. Verify the Page File is set to 'System Managed', close Chrome " +
+                        "and Steam Web Helper, and consider adding more physical RAM." + nvmeTempNote);
+            }
+
+            string nvmeTempHint = nvmeTempC < 0
+                ? " NVMe temperature is currently unavailable (N/A) — enable S.M.A.R.T. polling in " +
+                  "HWiNFO64 or Samsung Magician to check for thermal throttling (drives often stall above 70°C)."
+                : string.Empty;
             return ("NVMe I/O stall",
                     $"Peak disk latency was {maxDisk:F1}ms before freeze. This could indicate NVMe thermal throttling " +
                     "(check NVMe temp in the graph above), driver issues, or background disk-intensive operations. " +
-                    "Also check CrystalDiskInfo for SMART errors.");
+                    "Also check CrystalDiskInfo for SMART errors." + nvmeTempHint);
         }
 
         // ── 6. Memory pressure (high RAM + high page faults) ──────────────────
@@ -242,11 +277,35 @@ public class FreezeDetector
         {
             double avgRam = ramSamples.Average();
             double avgPf  = pfSamples.Average();
-            if (avgRam > 90.0 && avgPf > 5000)
+            // 85% threshold chosen because the user's system hovers around 72% normally;
+            // 85% indicates active paging pressure without requiring a full 90%+ spike.
+            if (avgRam > 85.0 && avgPf > 5000)
+            {
+                string nvmeTempNote = nvmeTempC >= 65.0
+                    ? $" NVMe was at {nvmeTempC:F0}°C — thermal throttling may also be contributing."
+                    : nvmeTempC < 0
+                        ? " NVMe temperature is unavailable (N/A) — enable S.M.A.R.T. polling in HWiNFO64 " +
+                          "to check whether drive thermal throttling is also a factor."
+                        : string.Empty;
                 return ("Memory pressure — system paging to disk",
                         $"RAM utilisation was {avgRam:F0}% with {avgPf:F0} page faults/sec before freeze. " +
                         "The system is heavily swapping to the pagefile. Close memory-hungry applications, " +
-                        "add more RAM, or ensure the pagefile is on a fast NVMe drive.");
+                        "add more RAM, or ensure the pagefile is on a fast NVMe drive." + nvmeTempNote);
+            }
+        }
+
+        // ── 6a. Standby cache pressure (large Cache Bytes + high page faults) ─
+        if (preFreeze.TryGetValue(MetricNames.CacheBytes, out var cbSamples) && cbSamples.Length > 0 &&
+            preFreeze.TryGetValue(MetricNames.PageFaults, out var pfSamples2) && pfSamples2.Length > 0)
+        {
+            double peakCacheMB = cbSamples.Max();
+            double avgPf2      = pfSamples2.Average();
+            if (peakCacheMB > 4096 && avgPf2 > 10_000)
+                return ("Standby memory cache pressure",
+                        $"Windows Standby cache peaked at {peakCacheMB:F0} MB with {avgPf2:F0} page faults/sec. " +
+                        "When a game or application suddenly needed more RAM, Windows had to flush this cache, " +
+                        "triggering disk reads that stalled the system. Consider using EmptyStandbyList to " +
+                        "proactively clear the standby cache, or add more physical RAM.");
         }
 
         // ── 7. GPU TDR event ──────────────────────────────────────────────────

@@ -24,6 +24,9 @@ public class SystemMonitor : IDisposable
     private PerformanceCounter? _dpcCounter;
     private PerformanceCounter? _interruptCounter;
     private PerformanceCounter? _pageFaultsCounter;
+    private PerformanceCounter? _writeCopiesCounter;
+    private PerformanceCounter? _transitionFaultsCounter;
+    private PerformanceCounter? _cacheBytesCounter;
     private readonly List<PerformanceCounter> _netInCounters  = new();
     private readonly List<PerformanceCounter> _netOutCounters = new();
 
@@ -38,9 +41,12 @@ public class SystemMonitor : IDisposable
     private readonly Queue<double> _cpuTempBuffer   = new();
     private readonly Queue<double> _gpuTempBuffer   = new();
     private readonly Queue<double> _nvmeTempBuffer  = new();
-    private readonly Queue<double> _pageFaultsBuffer = new();
-    private readonly Queue<double> _netInBuffer     = new();
-    private readonly Queue<double> _netOutBuffer    = new();
+    private readonly Queue<double> _pageFaultsBuffer      = new();
+    private readonly Queue<double> _writeCopiesBuffer     = new();
+    private readonly Queue<double> _transitionFaultsBuffer = new();
+    private readonly Queue<double> _cacheBytesBuffer      = new();
+    private readonly Queue<double> _netInBuffer           = new();
+    private readonly Queue<double> _netOutBuffer          = new();
 
     // Latest values (thread-safe via _lock)
     public double LatestCpu              { get; private set; }
@@ -53,9 +59,13 @@ public class SystemMonitor : IDisposable
     public double LatestCpuTempC         { get; private set; } = -1;
     public double LatestGpuTempC         { get; private set; } = -1;
     public double LatestNvmeTempC        { get; private set; } = -1;
-    public double LatestPageFaultsSec    { get; private set; }
-    public double LatestNetInMbps        { get; private set; }
-    public double LatestNetOutMbps       { get; private set; }
+    public double LatestPageFaultsSec      { get; private set; }
+    public double LatestWriteCopiesSec     { get; private set; }
+    public double LatestTransitionFaultsSec { get; private set; }
+    /// <summary>Windows Standby cache size in megabytes (Memory\Cache Bytes converted).</summary>
+    public double LatestCacheMB            { get; private set; }
+    public double LatestNetInMbps          { get; private set; }
+    public double LatestNetOutMbps         { get; private set; }
     public DriveHealthSummary LatestDriveHealth { get; private set; } = DriveHealthSummary.Unknown;
 
     public bool IsRunning { get; private set; }
@@ -85,7 +95,10 @@ public class SystemMonitor : IDisposable
         _diskWriteCounter = TryCreate("PhysicalDisk", "Avg. Disk sec/Write",  "_Total");
         _dpcCounter       = TryCreate("Processor",    "% DPC Time",           "_Total");
         _interruptCounter = TryCreate("Processor",    "% Interrupt Time",     "_Total");
-        _pageFaultsCounter = TryCreate("Memory",      "Page Faults/sec",      null);
+        _pageFaultsCounter       = TryCreate("Memory",      "Page Faults/sec",       null);
+        _writeCopiesCounter      = TryCreate("Memory",      "Write Copies/sec",      null);
+        _transitionFaultsCounter = TryCreate("Memory",      "Transition Faults/sec", null);
+        _cacheBytesCounter       = TryCreate("Memory",      "Cache Bytes",           null);
 
         // Network I/O — enumerate all interface instances and sum them
         try
@@ -120,7 +133,10 @@ public class SystemMonitor : IDisposable
         try { _diskWriteCounter?.NextValue(); } catch { }
         try { _dpcCounter?.NextValue();       } catch { }
         try { _interruptCounter?.NextValue(); } catch { }
-        try { _pageFaultsCounter?.NextValue(); } catch { }
+        try { _pageFaultsCounter?.NextValue();       } catch { }
+        try { _writeCopiesCounter?.NextValue();      } catch { }
+        try { _transitionFaultsCounter?.NextValue(); } catch { }
+        try { _cacheBytesCounter?.NextValue();       } catch { }
         foreach (var c in _netInCounters)  try { c.NextValue(); } catch { }
         foreach (var c in _netOutCounters) try { c.NextValue(); } catch { }
     }
@@ -165,7 +181,11 @@ public class SystemMonitor : IDisposable
         double dpc        = _dpcLatencyMonitor?.ReadDpcPercent() ?? SafeRead(_dpcCounter, 0);
         double interrupt  = SafeRead(_interruptCounter, 0);
         double gpu        = _gpuMonitor?.ReadGpuUsage() ?? -1;
-        double pageFaults = SafeRead(_pageFaultsCounter, 0);
+        double pageFaults       = SafeRead(_pageFaultsCounter,       0);
+        double writeCopies      = SafeRead(_writeCopiesCounter,      0);
+        double transitionFaults = SafeRead(_transitionFaultsCounter, 0);
+        // Cache Bytes → convert to MB for easier display and graphing
+        double cacheMB          = SafeRead(_cacheBytesCounter,       0) / (1024.0 * 1024.0);
 
         // Network I/O — sum all interfaces, convert bytes/sec → MB/s
         double netInBytes = 0, netOutBytes = 0;
@@ -192,8 +212,11 @@ public class SystemMonitor : IDisposable
             LatestCpuTempC         = thermal.CpuTempC;
             LatestGpuTempC         = thermal.GpuTempC;
             LatestNvmeTempC        = thermal.NvmeTempC;
-            LatestPageFaultsSec    = pageFaults;
-            LatestNetInMbps        = netInMbps;
+            LatestPageFaultsSec       = pageFaults;
+            LatestWriteCopiesSec      = writeCopies;
+            LatestTransitionFaultsSec = transitionFaults;
+            LatestCacheMB             = cacheMB;
+            LatestNetInMbps           = netInMbps;
             LatestNetOutMbps       = netOutMbps;
             LatestDriveHealth      = health;
 
@@ -207,8 +230,11 @@ public class SystemMonitor : IDisposable
             Enqueue(_cpuTempBuffer,    thermal.CpuTempC);
             Enqueue(_gpuTempBuffer,    thermal.GpuTempC);
             Enqueue(_nvmeTempBuffer,   thermal.NvmeTempC);
-            Enqueue(_pageFaultsBuffer, pageFaults);
-            Enqueue(_netInBuffer,      netInMbps);
+            Enqueue(_pageFaultsBuffer,       pageFaults);
+            Enqueue(_writeCopiesBuffer,      writeCopies);
+            Enqueue(_transitionFaultsBuffer, transitionFaults);
+            Enqueue(_cacheBytesBuffer,       cacheMB);
+            Enqueue(_netInBuffer,            netInMbps);
             Enqueue(_netOutBuffer,     netOutMbps);
         }
 
@@ -267,8 +293,11 @@ public class SystemMonitor : IDisposable
         MetricNames.CpuTempC   => _cpuTempBuffer,
         MetricNames.GpuTempC   => _gpuTempBuffer,
         MetricNames.NvmeTempC  => _nvmeTempBuffer,
-        MetricNames.PageFaults => _pageFaultsBuffer,
-        MetricNames.NetIn      => _netInBuffer,
+        MetricNames.PageFaults      => _pageFaultsBuffer,
+        MetricNames.WriteCopies     => _writeCopiesBuffer,
+        MetricNames.TransitionFaults => _transitionFaultsBuffer,
+        MetricNames.CacheBytes      => _cacheBytesBuffer,
+        MetricNames.NetIn           => _netInBuffer,
         MetricNames.NetOut     => _netOutBuffer,
         _ => null
     };
@@ -286,6 +315,9 @@ public class SystemMonitor : IDisposable
         _dpcCounter?.Dispose();
         _interruptCounter?.Dispose();
         _pageFaultsCounter?.Dispose();
+        _writeCopiesCounter?.Dispose();
+        _transitionFaultsCounter?.Dispose();
+        _cacheBytesCounter?.Dispose();
         foreach (var c in _netInCounters)  c.Dispose();
         foreach (var c in _netOutCounters) c.Dispose();
         _gpuMonitor?.Dispose();
@@ -310,7 +342,10 @@ public static class MetricNames
     public const string CpuTempC   = "CPU Temp (°C)";
     public const string GpuTempC   = "GPU Temp (°C)";
     public const string NvmeTempC  = "NVMe Temp (°C)";
-    public const string PageFaults = "Page Faults/s";
-    public const string NetIn      = "Net In (MB/s)";
+    public const string PageFaults       = "Page Faults/s";
+    public const string WriteCopies      = "Write Copies/s";
+    public const string TransitionFaults = "Transition Faults/s";
+    public const string CacheBytes       = "Cache (MB)";
+    public const string NetIn            = "Net In (MB/s)";
     public const string NetOut     = "Net Out (MB/s)";
 }

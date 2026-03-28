@@ -81,6 +81,32 @@ public class FreezeDetailForm : Form
         Line("Duration:", $"{ev.DurationSeconds:F2} seconds");
         Line("Most Likely Cause:", ev.MostLikelyCause, Color.FromArgb(255, 150, 100));
         Line("TDR Detected:", ev.TdrDetected ? "YES — GPU driver timeout!" : "No", ev.TdrDetected ? Color.FromArgb(255, 80, 80) : null);
+
+        // Thermal snapshot
+        string cpuTempStr  = ev.CpuTempCAtFreeze  < 0 ? "N/A" : $"{ev.CpuTempCAtFreeze:F0} °C";
+        string gpuTempStr  = ev.GpuTempCAtFreeze  < 0 ? "N/A" : $"{ev.GpuTempCAtFreeze:F0} °C";
+        string nvmeTempStr = ev.NvmeTempCAtFreeze < 0 ? "N/A" : $"{ev.NvmeTempCAtFreeze:F0} °C";
+
+        Color CpuTempColor()  => ev.CpuTempCAtFreeze  >= 95 ? Color.FromArgb(255, 80, 80) :
+                                 ev.CpuTempCAtFreeze  >= 80 ? Color.FromArgb(255, 180, 80) : Color.FromArgb(100, 220, 100);
+        Color GpuTempColor()  => ev.GpuTempCAtFreeze  >= 83 ? Color.FromArgb(255, 80, 80) :
+                                 ev.GpuTempCAtFreeze  >= 70 ? Color.FromArgb(255, 180, 80) : Color.FromArgb(100, 220, 100);
+        Color NvmeTempColor() => ev.NvmeTempCAtFreeze >= 70 ? Color.FromArgb(255, 80, 80) :
+                                 ev.NvmeTempCAtFreeze >= 55 ? Color.FromArgb(255, 180, 80) : Color.FromArgb(100, 220, 100);
+
+        Line("CPU Temp at Freeze:", cpuTempStr,
+            ev.CpuTempCAtFreeze >= 0 ? CpuTempColor() : null);
+        Line("GPU Temp at Freeze:", gpuTempStr,
+            ev.GpuTempCAtFreeze >= 0 ? GpuTempColor() : null);
+        Line("NVMe Temp at Freeze:", nvmeTempStr,
+            ev.NvmeTempCAtFreeze >= 0 ? NvmeTempColor() : null);
+
+        if (!string.IsNullOrEmpty(ev.DriveHealthAtFreeze))
+        {
+            bool driveWarn = ev.DriveHealthAtFreeze.Contains("⚠");
+            Line("Drive Health:", ev.DriveHealthAtFreeze,
+                driveWarn ? Color.FromArgb(255, 80, 80) : Color.FromArgb(100, 220, 100));
+        }
         Sep();
 
         Header("─── Details ────────────────────────────────────────────────");

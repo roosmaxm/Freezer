@@ -90,42 +90,76 @@ public class FreezeDetector
         int sampleCount = SystemMonitor.PreFreezeWindowSamples;
         var preFreeze = new Dictionary<string, double[]>
         {
-            [MetricNames.Cpu] = _monitor.GetLastSamples(MetricNames.Cpu, sampleCount),
-            [MetricNames.Ram] = _monitor.GetLastSamples(MetricNames.Ram, sampleCount),
-            [MetricNames.DiskRead] = _monitor.GetLastSamples(MetricNames.DiskRead, sampleCount),
-            [MetricNames.DiskWrite] = _monitor.GetLastSamples(MetricNames.DiskWrite, sampleCount),
-            [MetricNames.Dpc] = _monitor.GetLastSamples(MetricNames.Dpc, sampleCount),
-            [MetricNames.Interrupt] = _monitor.GetLastSamples(MetricNames.Interrupt, sampleCount),
-            [MetricNames.Gpu] = _monitor.GetLastSamples(MetricNames.Gpu, sampleCount),
+            [MetricNames.Cpu]        = _monitor.GetLastSamples(MetricNames.Cpu,        sampleCount),
+            [MetricNames.Ram]        = _monitor.GetLastSamples(MetricNames.Ram,        sampleCount),
+            [MetricNames.DiskRead]   = _monitor.GetLastSamples(MetricNames.DiskRead,   sampleCount),
+            [MetricNames.DiskWrite]  = _monitor.GetLastSamples(MetricNames.DiskWrite,  sampleCount),
+            [MetricNames.Dpc]        = _monitor.GetLastSamples(MetricNames.Dpc,        sampleCount),
+            [MetricNames.Interrupt]  = _monitor.GetLastSamples(MetricNames.Interrupt,  sampleCount),
+            [MetricNames.Gpu]        = _monitor.GetLastSamples(MetricNames.Gpu,        sampleCount),
+            [MetricNames.CpuTempC]   = _monitor.GetLastSamples(MetricNames.CpuTempC,   sampleCount),
+            [MetricNames.GpuTempC]   = _monitor.GetLastSamples(MetricNames.GpuTempC,   sampleCount),
+            [MetricNames.NvmeTempC]  = _monitor.GetLastSamples(MetricNames.NvmeTempC,  sampleCount),
+            [MetricNames.PageFaults] = _monitor.GetLastSamples(MetricNames.PageFaults, sampleCount),
+            [MetricNames.NetIn]      = _monitor.GetLastSamples(MetricNames.NetIn,      sampleCount),
         };
 
         bool tdrDetected = GpuMonitor.CheckForTdrEvent(10);
 
-        var (cause, details) = AnalyzeCause(preFreeze, usbDevices, tdrDetected);
+        // Snapshot current thermal and health readings at freeze time
+        double cpuTempAtFreeze  = _monitor.LatestCpuTempC;
+        double gpuTempAtFreeze  = _monitor.LatestGpuTempC;
+        double nvmeTempAtFreeze = _monitor.LatestNvmeTempC;
+        string driveHealth      = _monitor.LatestDriveHealth.ToDisplayString();
+
+        var (cause, details) = AnalyzeCause(
+            preFreeze, usbDevices, tdrDetected,
+            cpuTempAtFreeze, gpuTempAtFreeze, nvmeTempAtFreeze);
 
         var topProcesses = GetTopProcesses();
 
         return new FreezeEvent
         {
-            Index = eventIndex,
-            Timestamp = _freezeStartTime,
-            DurationSeconds = durationSeconds,
-            MostLikelyCause = cause,
-            Details = details,
-            PreFreezeMetrics = preFreeze,
+            Index                  = eventIndex,
+            Timestamp              = _freezeStartTime,
+            DurationSeconds        = durationSeconds,
+            MostLikelyCause        = cause,
+            Details                = details,
+            PreFreezeMetrics       = preFreeze,
             TopProcessesAtFreezeTime = topProcesses,
-            ConnectedUsbDevices = new List<string>(usbDevices),
-            TdrDetected = tdrDetected,
-            SystemEventLogEntries = EventLogMonitor.GetRecentEvents(15)
+            ConnectedUsbDevices    = new List<string>(usbDevices),
+            TdrDetected            = tdrDetected,
+            SystemEventLogEntries  = EventLogMonitor.GetRecentEvents(15),
+            CpuTempCAtFreeze       = cpuTempAtFreeze,
+            GpuTempCAtFreeze       = gpuTempAtFreeze,
+            NvmeTempCAtFreeze      = nvmeTempAtFreeze,
+            DriveHealthAtFreeze    = driveHealth,
         };
     }
 
     private static (string cause, string details) AnalyzeCause(
         Dictionary<string, double[]> preFreeze,
         List<string> usbDevices,
-        bool tdrDetected)
+        bool tdrDetected,
+        double cpuTempC,
+        double gpuTempC,
+        double nvmeTempC)
     {
-        // 1. DPC Latency spike
+        // ── 1. CPU thermal throttling ─────────────────────────────────────────
+        if (cpuTempC >= 95.0)
+            return ("CPU thermal throttling",
+                    $"CPU temperature was {cpuTempC:F0}°C at freeze time (throttle threshold ~95°C). " +
+                    "Check that the CPU cooler is seated correctly, thermal paste has not dried out, " +
+                    "and case airflow is adequate. Clean dust filters and heatsink fins.");
+
+        // ── 2. GPU thermal throttling ──────────────────────────────────────────
+        if (gpuTempC >= 83.0)
+            return ("GPU thermal throttling",
+                    $"GPU temperature was {gpuTempC:F0}°C at freeze time (typical throttle threshold ~83°C). " +
+                    "Improve GPU cooling: replace thermal pads/paste, increase fan curve, or improve case airflow. " +
+                    "Use MSI Afterburner to monitor GPU core temp over time.");
+
+        // ── 3. DPC Latency spike ───────────────────────────────────────────────
         if (preFreeze.TryGetValue(MetricNames.Dpc, out var dpcSamples) && dpcSamples.Length > 0)
         {
             double avgDpc = dpcSamples.Average();
@@ -135,7 +169,7 @@ public class FreezeDetector
                         "Use LatencyMon to identify the offending driver. Common culprits: audio drivers, USB host controller drivers, NVIDIA drivers.");
         }
 
-        // 2. Interrupt spike
+        // ── 4. Interrupt spike ────────────────────────────────────────────────
         if (preFreeze.TryGetValue(MetricNames.Interrupt, out var intSamples) && intSamples.Length > 0)
         {
             double avgInt = intSamples.Average();
@@ -150,26 +184,46 @@ public class FreezeDetector
             }
         }
 
-        // 3. NVMe disk stall
-        if (preFreeze.TryGetValue(MetricNames.DiskRead, out var diskReadSamples) &&
-            preFreeze.TryGetValue(MetricNames.DiskWrite, out var diskWriteSamples))
+        // ── 5. NVMe thermal throttling (disk stall + elevated NVMe temp) ──────
+        double maxDisk = 0;
+        if (preFreeze.TryGetValue(MetricNames.DiskRead,  out var dr) && dr.Length  > 0) maxDisk = Math.Max(maxDisk, dr.Max());
+        if (preFreeze.TryGetValue(MetricNames.DiskWrite, out var dw) && dw.Length > 0) maxDisk = Math.Max(maxDisk, dw.Max());
+
+        if (maxDisk > DiskHighLatencyThreshold)
         {
-            double maxDisk = 0;
-            if (diskReadSamples.Length > 0) maxDisk = Math.Max(maxDisk, diskReadSamples.Max());
-            if (diskWriteSamples.Length > 0) maxDisk = Math.Max(maxDisk, diskWriteSamples.Max());
-            if (maxDisk > DiskHighLatencyThreshold)
-                return ("NVMe I/O stall",
-                        $"Peak disk latency was {maxDisk:F1}ms before freeze. This could indicate NVMe thermal throttling, " +
-                        "driver issues, or background disk-intensive operations.");
+            if (nvmeTempC >= 65.0)
+                return ("NVMe thermal throttling",
+                        $"Peak disk latency was {maxDisk:F1}ms and NVMe temperature was {nvmeTempC:F0}°C " +
+                        "(drives begin throttling in the 65-70°C range). " +
+                        "Add an NVMe heatsink, improve case airflow, or move the drive to a cooler M.2 slot. " +
+                        "Sustained sequential workloads (large file transfers, game installs) commonly trigger this.");
+
+            return ("NVMe I/O stall",
+                    $"Peak disk latency was {maxDisk:F1}ms before freeze. This could indicate NVMe thermal throttling " +
+                    "(check NVMe temp in the graph above), driver issues, or background disk-intensive operations. " +
+                    "Also check CrystalDiskInfo for SMART errors.");
         }
 
-        // 4. GPU TDR event
+        // ── 6. Memory pressure (high RAM + high page faults) ──────────────────
+        if (preFreeze.TryGetValue(MetricNames.Ram, out var ramSamples) && ramSamples.Length > 0 &&
+            preFreeze.TryGetValue(MetricNames.PageFaults, out var pfSamples) && pfSamples.Length > 0)
+        {
+            double avgRam = ramSamples.Average();
+            double avgPf  = pfSamples.Average();
+            if (avgRam > 90.0 && avgPf > 5000)
+                return ("Memory pressure — system paging to disk",
+                        $"RAM utilisation was {avgRam:F0}% with {avgPf:F0} page faults/sec before freeze. " +
+                        "The system is heavily swapping to the pagefile. Close memory-hungry applications, " +
+                        "add more RAM, or ensure the pagefile is on a fast NVMe drive.");
+        }
+
+        // ── 7. GPU TDR event ──────────────────────────────────────────────────
         if (tdrDetected)
             return ("NVIDIA GPU TDR (Timeout Detection & Recovery) — update GPU drivers",
                     "A GPU TDR event (EventID 4101 or nvlddmkm Event 13) was detected in the System event log within 10 seconds " +
                     "of this freeze. Update your NVIDIA RTX 3070 drivers. If issue persists, check GPU stability with FurMark.");
 
-        // 5. Background process burst
+        // ── 8. Background process burst ────────────────────────────────────────
         var suspectProcesses = new[] { "MsMpEng", "SearchIndexer", "WmiPrvSE", "TiWorker", "NvContainerLocalSystem" };
         var topProcs = GetTopProcesses();
         foreach (var proc in topProcs)
@@ -183,9 +237,9 @@ public class FreezeDetector
             }
         }
 
-        // 6. Unknown
+        // ── 9. Unknown ────────────────────────────────────────────────────────
         return ("Unknown — no clear spike detected before freeze",
-                "No significant DPC, interrupt, disk, or GPU anomaly was detected before this freeze. " +
+                "No significant DPC, interrupt, disk, thermal, or GPU anomaly was detected before this freeze. " +
                 "Consider enabling Windows Performance Recorder (WPR) during next occurrence for ETW-level analysis.");
     }
 

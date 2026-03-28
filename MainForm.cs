@@ -30,12 +30,21 @@ public partial class MainForm : Form
 
     private static readonly (string Metric, Color LineColor, string Unit, double MaxY)[] GraphDefinitions =
     {
-        (MetricNames.Cpu,       Color.FromArgb(100, 220, 100),  "%",   100),
-        (MetricNames.Ram,       Color.FromArgb(80,  160, 255),  "%",   100),
-        (MetricNames.DiskRead,  Color.FromArgb(255, 200, 60),   "ms",  100),
-        (MetricNames.Dpc,       Color.FromArgb(255, 100, 100),  "%",   100),
-        (MetricNames.Gpu,       Color.FromArgb(180, 100, 255),  "%",   100),
-        (MetricNames.Interrupt, Color.FromArgb(255, 140, 50),   "%",   100),
+        // Row 1: CPU load, GPU load, CPU temperature, GPU temperature
+        (MetricNames.Cpu,        Color.FromArgb(100, 220, 100), "%",    100),
+        (MetricNames.Gpu,        Color.FromArgb(180, 100, 255), "%",    100),
+        (MetricNames.CpuTempC,   Color.FromArgb(255, 140,  60), "°C",   120),
+        (MetricNames.GpuTempC,   Color.FromArgb(255,  80, 160), "°C",   120),
+        // Row 2: RAM, disk read, disk write, NVMe temperature
+        (MetricNames.Ram,        Color.FromArgb( 80, 160, 255), "%",    100),
+        (MetricNames.DiskRead,   Color.FromArgb(255, 200,  60), "ms",   100),
+        (MetricNames.DiskWrite,  Color.FromArgb(255, 160,  40), "ms",   100),
+        (MetricNames.NvmeTempC,  Color.FromArgb(255, 200, 100), "°C",   100),
+        // Row 3: DPC, interrupt %, page faults, network in
+        (MetricNames.Dpc,        Color.FromArgb(255, 100, 100), "%",    100),
+        (MetricNames.Interrupt,  Color.FromArgb(255, 140,  50), "%",    100),
+        (MetricNames.PageFaults, Color.FromArgb(160, 255, 200), "/s", 10000),
+        (MetricNames.NetIn,      Color.FromArgb(100, 220, 240), "MB/s",  100),
     };
 
     public MainForm()
@@ -287,17 +296,23 @@ public partial class MainForm : Form
             return;
         }
 
-        double gpu = _monitor.LatestGpuPercent;
-        string gpuStr = gpu < 0 ? "N/A" : $"{gpu:F0}%";
+        string GpuStr(double v) => v < 0 ? "N/A" : $"{v:F0}%";
+        string TempStr(double v) => v < 0 ? "N/A" : $"{v:F0}°C";
+
+        string driveStatus = _monitor.LatestDriveHealth.AnyErrors
+            ? "⚠ Drive Warning"
+            : (_monitor.LatestDriveHealth.Drives.Count > 0 ? "Drive: ✓" : "Drive: N/A");
 
         lblCurrentValues.Text =
-            $"CPU: {_monitor.LatestCpu:F0}%  " +
+            $"CPU: {_monitor.LatestCpu:F0}% ({TempStr(_monitor.LatestCpuTempC)})  " +
+            $"GPU: {GpuStr(_monitor.LatestGpuPercent)} ({TempStr(_monitor.LatestGpuTempC)})  " +
             $"RAM: {_monitor.LatestRam:F0}%  " +
-            $"Disk R: {_monitor.LatestDiskReadMs:F1}ms  " +
-            $"Disk W: {_monitor.LatestDiskWriteMs:F1}ms  " +
-            $"DPC: {_monitor.LatestDpcPercent:F1}%  " +
-            $"IRQ: {_monitor.LatestInterruptPercent:F1}%  " +
-            $"GPU: {gpuStr}";
+            $"NVMe: {TempStr(_monitor.LatestNvmeTempC)}  " +
+            $"Disk R: {_monitor.LatestDiskReadMs:F1}ms  W: {_monitor.LatestDiskWriteMs:F1}ms  " +
+            $"DPC: {_monitor.LatestDpcPercent:F1}%  IRQ: {_monitor.LatestInterruptPercent:F1}%  " +
+            $"PF: {_monitor.LatestPageFaultsSec:F0}/s  " +
+            $"Net↓: {_monitor.LatestNetInMbps:F1}MB/s  " +
+            $"{driveStatus}";
     }
 
     private void UpdateStatusBar(string message)

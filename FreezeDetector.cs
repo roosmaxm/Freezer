@@ -21,6 +21,10 @@ public class FreezeDetector
     private DateTime _freezeStartTime;
     private bool _inFreeze;
 
+    // Disk-stall detection state (high disk latency while CPU is not fully idle)
+    private bool _inDiskStall;
+    private DateTime _diskStallStartTime;
+
     private readonly SystemMonitor _monitor;
 
     /// <summary>
@@ -69,17 +73,38 @@ public class FreezeDetector
                 var freezeEvent = BuildFreezeEvent(durationSeconds, usbDevices, eventIndex);
                 _inFreeze = false;
                 _consecutiveFreezeCount = 0;
-
-                // Background process bursts (e.g. MsMpEng, SearchIndexer) don't represent
-                // true system freezes — they appear in idle gaps and clutter the log.
-                // Skip them silently so only actionable events are surfaced.
-                if (!freezeEvent.MostLikelyCause.StartsWith("Background process burst",
-                        StringComparison.OrdinalIgnoreCase))
-                    FreezeDetected?.Invoke(this, freezeEvent);
+                FreezeDetected?.Invoke(this, freezeEvent);
             }
             else
             {
                 _consecutiveFreezeCount = 0;
+            }
+        }
+
+        // ── Disk-stall detection ────────────────────────────────────────────
+        // A disk latency spike above the threshold causes a perceived freeze even
+        // when the CPU is still active (e.g. game stutter, UI hang during I/O).
+        // Guarded by !_inFreeze because during a hard freeze disk latency is near
+        // zero, so the two detectors are mutually exclusive by nature; the guard
+        // also avoids emitting duplicate events for the same stall period.
+        bool hasDiskLatencySpike = diskRead >= DiskHighLatencyThreshold || diskWrite >= DiskHighLatencyThreshold;
+
+        if (hasDiskLatencySpike)
+        {
+            if (!_inDiskStall && !_inFreeze)
+            {
+                _inDiskStall = true;
+                _diskStallStartTime = DateTime.Now;
+            }
+        }
+        else
+        {
+            if (_inDiskStall)
+            {
+                double durationSeconds = (DateTime.Now - _diskStallStartTime).TotalSeconds;
+                var freezeEvent = BuildFreezeEvent(durationSeconds, usbDevices, eventIndex);
+                _inDiskStall = false;
+                FreezeDetected?.Invoke(this, freezeEvent);
             }
         }
     }
